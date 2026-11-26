@@ -1,0 +1,17 @@
+{
+  "root": "/home/dev/feedback/uid38855",
+  "B": "/home/dev/feedback/uid38855",
+  "sha": "0873c0db96a61903ad0a7615a9a094fda4fada58",
+  "wslDistro": "Ubuntu-26.04",
+  "source": {
+    "owner": "hasherezade",
+    "repo": "hollows_hunter",
+    "sha": "0873c0db96a61903ad0a7615a9a094fda4fada58"
+  },
+  "fork": {
+    "owner": "Rrr119",
+    "repo": "hollows_hunter",
+    "cloneUrl": "https://github.com/Rrr119/hollows_hunter.git"
+  },
+  "at": "2026-11-25T23:47:42.029Z"
+}

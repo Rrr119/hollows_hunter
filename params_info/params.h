@@ -52,6 +52,7 @@ using namespace pesieve;
 #define PARAM_LOG "log"
 #define PARAM_JSON "json"
 #define PARAM_JSON_LVL "jlvl"
+#define PARAM_WHITELIST "wlist"
 
 
 std::string version_to_str(DWORD version)
@@ -315,6 +316,11 @@ public:
         this->addParam(new StringParam(PARAM_PATTERN, false));
         this->setInfo(PARAM_PATTERN, "Set additional shellcode patterns (file in the SIG format).");
 
+        this->addParam(new StringParam(PARAM_WHITELIST, false));
+        this->setInfo(PARAM_WHITELIST,
+            "Whitelist config (signer/path rules) used to suppress false positives from trusted security software.\n"
+            "\t   Lines: signer:<substring> | path:<prefix/glob> | name:<file> ; optional prefixes: sig:/nosig:/strict:");
+
         //PARAM_DOTNET_POLICY
         enumParam = new EnumParam(PARAM_DOTNET_POLICY, "dotnet_policy", false);
         if (enumParam) {
@@ -393,6 +399,7 @@ public:
         this->addParamToGroup(PARAM_DOTNET_POLICY, str_group);
         this->addParamToGroup(PARAM_MODULES_IGNORE, str_group);
         this->addParamToGroup(PARAM_PROCESSES_IGNORE, str_group);
+        this->addParamToGroup(PARAM_WHITELIST, str_group);
 
         str_group = "1. scan targets";
         this->addGroup(new ParamGroup(str_group));
@@ -460,6 +467,13 @@ public:
         copyVal<IntParam>(PARAM_PTIMES, ps.ptimes);
         copyVal<BoolParam>(PARAM_JSON, ps.json_output);
         copyVal<StringParam>(PARAM_DIR, ps.out_dir);
+        {
+            StringParam* wlParam = dynamic_cast<StringParam*>(this->getParam(PARAM_WHITELIST));
+            if (wlParam && wlParam->isSet()) {
+                ps.whitelist_file = wlParam->value;
+                ps.whitelist_enabled = true;
+            }
+        }
 
         StringListParam* myParam = dynamic_cast<StringListParam*>(this->getParam(PARAM_PNAME));
         if (myParam && myParam->isSet()) {

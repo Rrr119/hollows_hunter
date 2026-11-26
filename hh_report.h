@@ -9,6 +9,15 @@
 
 #include "hh_params.h"
 
+#include "whitelist/hh_types.h"
+
+// Per-process whitelist audit entry, keyed by PID.
+typedef struct hh_whitelist_audit {
+    hh_white::ProcessVerdict verdict;
+    bool was_suspicious = false;   // pe-sieve flagged the process before whitelisting
+    bool remains_suspicious = false; // still reported after applying the whitelist
+} t_hh_whitelist_audit;
+
 class HHScanReport
 {
 public:
@@ -35,6 +44,16 @@ public:
     }
 
     bool appendReport(pesieve::t_report &scan_report, const std::wstring &img_name);
+
+    // Stores the fine-grained classification / whitelist audit for a process.
+    // When the whitelist suppresses every finding of a previously suspicious
+    // process, the PID is removed from the suspicious list (the raw pe-sieve
+    // counters stay untouched for backward compatibility).
+    void appendWhitelistAudit(DWORD pid, const hh_white::ProcessVerdict& verdict);
+    const std::map<DWORD, t_hh_whitelist_audit>& getWhitelistAudits() const
+    {
+        return whitelistAudits;
+    }
 
     size_t countReports(const pesieve::t_results_filter rfilter) const
     {
@@ -84,5 +103,6 @@ protected:
     std::map<DWORD, std::wstring> pidToName;
     std::vector<DWORD> suspicious;
     std::vector<DWORD> failed;
+    std::map<DWORD, t_hh_whitelist_audit> whitelistAudits;
     friend class HHScanner;
 };

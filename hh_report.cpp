@@ -9,6 +9,8 @@
 #include <cmath>
 
 #include "util/time_util.h"
+#include "term_util.h"
+#include "whitelist/hh_output.h"
 
 #define OUT_PADDED(stream, field_size, str) \
 std::cout.fill(' '); \
@@ -27,6 +29,29 @@ bool HHScanReport::appendReport(pesieve::t_report &scan_report, const std::wstri
         this->failed.push_back(scan_report.pid);
     }
     return true;
+}
+
+void HHScanReport::appendWhitelistAudit(DWORD pid, const hh_white::ProcessVerdict& verdict)
+{
+    t_hh_whitelist_audit audit;
+    audit.verdict = verdict;
+
+    std::map<DWORD, pesieve::t_report>::iterator report_itr = pidToReport.find(pid);
+    audit.was_suspicious = (report_itr != pidToReport.end() && report_itr->second.suspicious > 0);
+    audit.remains_suspicious = audit.was_suspicious && (verdict.countRemaining() > 0);
+    whitelistAudits[pid] = audit;
+
+    // If every indicator was explained by the whitelist, take the PID out of
+    // the actionable suspicious list. It remains available in the audit block.
+    if (audit.was_suspicious && !audit.remains_suspicious) {
+        for (std::vector<DWORD>::iterator itr = suspicious.begin();
+             itr != suspicious.end(); ++itr) {
+            if (*itr == pid) {
+                suspicious.erase(itr);
+                break;
+            }
+        }
+    }
 }
 
 size_t HHScanReport::reportsToString(std::wstringstream& stream, const pesieve::t_results_filter rfilter)
@@ -147,6 +172,24 @@ size_t HHScanReport::toJSON(std::wstringstream &stream, const t_hh_params &param
     }
     else {
         stream << L"\n";
+    }
+    // Additive extension block: every legacy field above keeps its exact shape.
+    if (!whitelistAudits.empty()) {
+        stream << L",\n";
+        OUT_PADDED(stream, level, L"\"whitelist_audit\" : [\n");
+        size_t audit_idx = 0;
+        for (std::map<DWORD, t_hh_whitelist_audit>::const_iterator itr = whitelistAudits.begin();
+             itr != whitelistAudits.end(); ++itr, ++audit_idx) {
+            const t_hh_whitelist_audit& audit = itr->second;
+            const std::string block =
+                hh_white::EnhancedOutput::verdictToJson(audit.verdict, (size_t)level + 1);
+            stream << hh::util::utf8_to_wstring(block);
+            if (audit_idx + 1 < whitelistAudits.size()) {
+                stream << L",";
+            }
+            stream << L"\n";
+        }
+        OUT_PADDED(stream, level, L"]\n");
     }
     level--;
     OUT_PADDED(stream, level, L"}\n");

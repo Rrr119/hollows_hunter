@@ -1,0 +1,32 @@
+# HollowsHunter whitelist configuration example.
+# Lines starting with '#' are comments. Matching is case-insensitive.
+#
+# Directives:
+#   signer:<substring>   match the Authenticode signer subject (CN)
+#   path:<prefix/glob>   match the on-disk load path of the module
+#   name:<file name>     match the module file name only
+#
+# Optional scope prefixes:
+#   sig:<rule>           rule applies only when the signature verifies as valid
+#   nosig:<rule>         rule applies only when the module is unsigned/unverified
+#   strict:<rule>        valid signature is mandatory in every case
+#
+# Safety: high-confidence injection types (hollowing, manual-mapped PE,
+# shellcode, thread shellcode) are NEVER suppressed regardless of the rules.
+# Only AV/EDR-style low-confidence indicators (code patches, IAT hooks,
+# unreachable files, header modifications) can be whitelisted.
+
+# Trusted security vendors, by certificate subject:
+signer:Microsoft Corporation
+signer:TrustedAV Inc.
+signer:EndpointGuard Ltd.
+
+# Signed AV/EDR installation directories:
+sig:path:C:\Program Files\TrustedAV
+sig:path:C:\Program Files\EndpointGuard
+
+# Windows driver store: require a fully valid signature (strict):
+strict:path:C:\Windows\System32\drivers
+
+# File-name based fallback for an internally re-packed, unsigned helper:
+nosig:name:legacy_avhelper.dll

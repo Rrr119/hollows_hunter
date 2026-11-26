@@ -13,9 +13,12 @@
 #include "util/time_util.h"
 #include "term_util.h"
 #include "util/process_util.h"
+#include "whitelist/hh_integration.h"
+#include "whitelist/hh_output.h"
 
 #include <paramkit.h>
 #include <mutex>
+#include <vector>
 
 #define PID_FIELD_SIZE 8
 
@@ -120,7 +123,7 @@ namespace util {
 //----
 
 HHScanner::HHScanner(t_hh_params& _args, time_t _initTime)
-    : hh_args(_args), initTime(_initTime)
+    : hh_args(_args), initTime(_initTime), whitelistConfigured(false)
 {
     if (!initTime) {
         initTime = time(NULL);
@@ -361,7 +364,20 @@ t_single_scan_status HHScanner::scanNextProcess(DWORD pid, WCHAR* exe_file, HHSc
     pesieve::t_report report = PESieve_scan(&pesieve_args);
     my_report.appendReport(report, exe_file);
 
-    printSingleReport(report);
+    // Fine-grained classification + signature/path whitelist (additive):
+    bool fully_whitelisted = false;
+    if (report.suspicious > 0 && report.errors != pesieve::ERROR_SCAN_FAILURE) {
+        postProcessWithWhitelist(pid, pesieve_args, my_report, report);
+        const std::map<DWORD, t_hh_whitelist_audit>& audits = my_report.getWhitelistAudits();
+        std::map<DWORD, t_hh_whitelist_audit>::const_iterator audit = audits.find(pid);
+        if (audit != audits.end() && audit->second.was_suspicious && !audit->second.remains_suspicious) {
+            fully_whitelisted = true;
+        }
+    }
+
+    if (!fully_whitelisted) {
+        printSingleReport(report);
+    }
     if (report.scanned > 0) {
         return SSCAN_SUCCESS;
     }
@@ -374,11 +390,67 @@ HHScanReport* HHScanner::scan()
     pesieve::t_params &pesieve_args = this->hh_args.pesieve_args;
     initOutDir(scan_start, pesieve_args);
 
+    if (hh_args.whitelist_enabled && !hh_args.whitelist_file.empty() && !whitelistConfigured) {
+        const size_t rules_loaded = whitelist_context.configure(
+            hh_args.whitelist_file, true);
+        whitelistConfigured = true;
+        if (!hh_args.quiet) {
+            const std::lock_guard<std::mutex> stdOutLock(g_stdOutMutex);
+            std::cout << "[INFO] Whitelist enabled: " << rules_loaded
+                      << " rule(s) loaded from " << hh_args.whitelist_file << std::endl;
+            if (rules_loaded == 0) {
+                std::cout << "[WARNING] Whitelist file contains no valid rules; "
+                             "no findings will be suppressed." << std::endl;
+            }
+        }
+    }
+
     HHScanReport *my_report = new HHScanReport(GetTickCount(), scan_start);
     scanProcesses(*my_report);
 
     my_report->setEndTick(GetTickCount(), time(NULL));
     return my_report;
+}
+
+void HHScanner::postProcessWithWhitelist(DWORD pid, pesieve::t_params &pesieve_args,
+                                         HHScanReport &report,
+                                         pesieve::t_report &scan_summary)
+{
+    hh_white::PostProcessor* processor = whitelist_context.getProcessor();
+    if (!processor) {
+        return; // feature unavailable (e.g. no platform verifier)
+    }
+
+    // Re-run through the extended API to obtain the detailed per-module JSON.
+    // The first call queries the required buffer size; pe-sieve caches scanned
+    // modules between rounds so the extra round is cheap.
+    size_t needed = 0;
+    PESieve_scan_ex(&pesieve_args, pesieve::REPORT_SCANNED, nullptr, 0, &needed);
+    if (needed == 0 || scan_summary.errors == pesieve::ERROR_SCAN_FAILURE) {
+        return;
+    }
+    std::vector<char> buffer(needed, 0);
+    PESieve_scan_ex(&pesieve_args, pesieve::REPORT_SCANNED,
+                    buffer.data(), buffer.size(), nullptr);
+    const std::string json(buffer.data());
+
+    hh_white::ProcessVerdict verdict;
+    if (!processor->process(json, verdict)) {
+        return;
+    }
+    report.appendWhitelistAudit(pid, verdict);
+
+    if (!hh_args.quiet) {
+        const std::string text = hh_white::EnhancedOutput::verdictToText(verdict);
+        if (!text.empty()) {
+            const std::lock_guard<std::mutex> stdOutLock(g_stdOutMutex);
+            std::cout << text;
+            if (verdict.isFpSuppressed()) {
+                std::cout << "    -> all indicators whitelisted for PID "
+                          << std::dec << pid << std::endl;
+            }
+        }
+    }
 }
 
 bool HHScanner::writeToLog(HHScanReport* hh_report)

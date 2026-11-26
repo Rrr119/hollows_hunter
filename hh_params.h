@@ -41,6 +41,10 @@ public:
     std::set<long> pids_list;
     std::set<std::wstring> ignored_names_list;
     t_process_type process_arch;
+
+    // Whitelist / fine-grained classification extension:
+    std::string whitelist_file;   // path to the signer/path whitelist config ("" = disabled)
+    bool whitelist_enabled;       // master switch for suppression (audit still emitted)
     pesieve::t_params pesieve_args; //PE-sieve parameters
 
     void init();

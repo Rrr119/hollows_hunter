@@ -10,6 +10,7 @@
 
 #include "hh_params.h"
 #include "hh_report.h"
+#include "whitelist/hh_integration.h"
 
 
 typedef enum single_status {
@@ -40,9 +41,15 @@ protected:
 
     t_single_scan_status scanNextProcess(DWORD pid, WCHAR* image_buf, HHScanReport &report);
     void initOutDir(time_t scan_time, pesieve::t_params &pesieve_args);
+    // Runs the fine-grained classification + whitelist pipeline on the
+    // detailed JSON report of one process and records the audit result.
+    void postProcessWithWhitelist(DWORD pid, pesieve::t_params &pesieve_args,
+                                  HHScanReport &report, pesieve::t_report &scan_summary);
 
     t_hh_params &hh_args;
     std::string outDir;
+    hh_white::HHWhitelistContext whitelist_context;
+    bool whitelistConfigured;
 
     // time when HollowsHunter was initialized
     time_t initTime;

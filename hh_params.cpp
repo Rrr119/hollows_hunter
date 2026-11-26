@@ -23,6 +23,9 @@ void hh_params::init()
     json_output = false;
     process_arch = PROCESS_ALL;
     ptimes = TIME_UNDEFINED;
+
+    whitelist_file = "";
+    whitelist_enabled = false;
 }
 
 hh_params& hh_params::operator=(const hh_params& other)
@@ -50,5 +53,7 @@ hh_params& hh_params::operator=(const hh_params& other)
     this->pids_list = other.pids_list;
     this->ignored_names_list = other.ignored_names_list;
     this->process_arch = other.process_arch;
+    this->whitelist_file = other.whitelist_file;
+    this->whitelist_enabled = other.whitelist_enabled;
     return *this;
 }

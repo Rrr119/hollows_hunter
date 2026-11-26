@@ -23,6 +23,10 @@ If no specific target is selected, it proceeds to scan all available processes.
 
 Hollows Hunter allows also for continuous memory scanning, via `/loop` argument, or by being run as an ETW listener: in `/etw` mode (64-bit version only).
 
+### Signature/path whitelist and fine-grained injection classification
+
+To reduce false positives from legitimate security software, Hollows Hunter can be given a whitelist of trusted Authenticode signers and module load paths (`/wlist <file>`). Findings are additionally classified into 8 explainable injection types, and high-confidence techniques (hollowing, manual-mapped PE, shellcode) are never suppressed. Full rule syntax, per-type rationale and the 100-sample acceptance results are documented in [WHITELIST.md](./WHITELIST.md).
+
 > [!IMPORTANT]  
 > The available arguments are documented on [Wiki](https://github.com/hasherezade/hollows_hunter/wiki). They can also be listed using the argument `/help`.
 

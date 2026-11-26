@@ -1,4 +1,5 @@
 docs/
 *.aps
 *.bak
+whitelist/tests/build/
 

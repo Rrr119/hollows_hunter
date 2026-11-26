@@ -61,7 +61,25 @@ set (srcs
 	util/process_privilege.cpp
 	util/time_util.cpp
 	util/strings_util.cpp
+	whitelist/hh_types.cpp
+	whitelist/hh_classifier.cpp
+	whitelist/hh_whitelist.cpp
+	whitelist/hh_json.cpp
+	whitelist/hh_report_adapter.cpp
+	whitelist/hh_postprocessor.cpp
+	whitelist/hh_output.cpp
+	whitelist/hh_integration.cpp
 )
+
+if(WIN32)
+	set(srcs ${srcs} whitelist/hh_signature_win.cpp)
+	if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+		# MSVC picks these up via #pragma comment; MinGW needs explicit libs.
+		list(APPEND EXTRA_LIBS "wintrust" "crypt32")
+	endif()
+endif()
+
+include_directories ( ${PROJECT_SOURCE_DIR} )
 
 set (hdrs
 	term_util.h
@@ -124,7 +142,7 @@ set ( PARAMKIT_LIB $<TARGET_FILE:paramkit> CACHE PATH "ParamKit library path" )
 
 cmake_policy(SET CMP0015 NEW)
 add_executable ( ${PROJECT_NAME} ${hdrs} ${srcs} ${rsrc} main.cpp )
-target_link_libraries ( ${PROJECT_NAME} ${M_PESIEVE} ${M_PARAMKIT} "psapi.lib" "ntdll.lib")
+target_link_libraries ( ${PROJECT_NAME} ${M_PESIEVE} ${M_PARAMKIT} "psapi.lib" "ntdll.lib" ${EXTRA_LIBS})
 
 # dependencies
 add_dependencies( ${PROJECT_NAME} ${M_PESIEVE} ${M_PARAMKIT} )
@@ -169,4 +187,25 @@ if(HH_BUILD_TESTING)
 	# 6) test scan code patterns with caching
 	add_test (TestCodeScanNoDump ${CMAKE_INSTALL_PREFIX}/hollows_hunter -json -dir scan_out -cache E -shellc P -ofilter 2)
 	set_tests_properties(TestCodeScanNoDump PROPERTIES PASS_REGULAR_EXPRESSION "\"suspicious_count\" : ")
+
+	# 7) platform-independent whitelist / classification logic. These targets
+	# contain no Windows-only translation unit, so they also build natively on
+	# Linux/macOS and make the 100-sample acceptance metric reproducible there.
+	if(NOT WIN32)
+		set(HH_WL_CORE
+			whitelist/hh_types.cpp
+			whitelist/hh_classifier.cpp
+			whitelist/hh_whitelist.cpp
+			whitelist/hh_json.cpp
+			whitelist/hh_report_adapter.cpp
+			whitelist/hh_postprocessor.cpp
+			whitelist/hh_output.cpp
+		)
+		add_executable(hh_unit_tests whitelist/tests/unit_tests.cpp ${HH_WL_CORE})
+		target_include_directories(hh_unit_tests PRIVATE ${PROJECT_SOURCE_DIR})
+		add_executable(hh_acceptance whitelist/tests/acceptance_harness.cpp ${HH_WL_CORE})
+		target_include_directories(hh_acceptance PRIVATE ${PROJECT_SOURCE_DIR})
+		add_test(NAME hh_unit_tests COMMAND hh_unit_tests)
+		add_test(NAME hh_acceptance COMMAND hh_acceptance)
+	endif()
 endif()
